@@ -1,6 +1,5 @@
 # Muv
 
-[![License: CC BY-NC 4.0](https://shields.io)](https://creativecommons.org)
 
 **Muv** is a lightweight, Python-powered smart dashboard application designed specifically for the Raspberry Pi. It transforms an HDMI-connected monitor into a clean, real-time household display showing a live clock, dynamic weather updates, and live public transit schedules via external APIs. 
 
@@ -125,4 +124,5 @@ This project is licensed under the **Creative Commons Attribution-NonCommercial 
 *To review the full legal terms, read the `LICENSE` file included in this repository or visit the [Creative Commons Legal Code](https://creativecommons.orglegalcode).*
 
 ### Commercial Exemptions
-If you are looking to deploy this dashboard software in a commercial environment or require enterprise integrations, please open an inquiry or contact the repository owner directly at `[YOUR CONTACT EMAIL/METHOD]` to negotiate a custom, commercial-use waiver.
+If you are looking to deploy this dashboard software in a commercial environment or require enterprise integrations, please open an inquiry or contact the repository owner directly to negotiate a custom, commercial-use waiver.
+[![License: CC BY-NC 4.0](https://shields.io)](https://creativecommons.org)
