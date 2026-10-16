@@ -107,7 +107,7 @@ Muv/
 └── src/
     └── services/
         ├── __init__.py
-        ├── weather.py   # Asynchronous background worker for weather API payload retrieval.
+        ├── weather_services.py   # Asynchronous background worker for weather API payload retrieval.
         └── transit.py   # Asynchronous background worker for bus timetable API processing.
 ```
 
