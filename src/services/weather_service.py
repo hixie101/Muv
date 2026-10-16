@@ -2,6 +2,9 @@
 Weather Service for Muv
 Handles fetching and caching weather data from OpenWeatherMap API.
 """
+
+import threading
+import queue
 import requests
 import time
 from PyQt6.QtCore import QObject, pyqtSignal
