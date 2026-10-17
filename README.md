@@ -3,7 +3,7 @@
 
 **Muv** is a lightweight, Python-powered smart dashboard application designed specifically for the Raspberry Pi. It transforms an HDMI-connected monitor into a clean, real-time household display showing a live clock, dynamic weather updates, and live public transit schedules via external APIs. 
 
-Optimized to run smoothly on hardware like the Raspberry Pi 3 Model B, the UI supports fluid background wallpaper shifts and crisp animations without stalling background data synchronization.
+Optimized to run smoothly on hardware like the Raspberry Pi 3 Model B or above, the UI supports fluid background wallpaper shifts and crisp animations without stalling background data synchronization.
 
 ---
 
