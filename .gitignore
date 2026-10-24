@@ -1,0 +1,13 @@
+# Local configuration (contains API keys / SMB credentials)
+config.json
+.env
+
+# Runtime data
+cache/
+wallpapers/
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc

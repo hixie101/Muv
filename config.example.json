@@ -1,0 +1,39 @@
+{
+  "log_level": "INFO",
+  "display": {
+    "fullscreen": true,
+    "hide_cursor": true,
+    "fade_ms": 1000,
+    "time_format": "%H:%M",
+    "date_format": "%A, %d %B %Y"
+  },
+  "weather": {
+    "api_key": "",
+    "city": "Hong Kong",
+    "units": "metric",
+    "refresh_seconds": 600
+  },
+  "transit": {
+    "refresh_seconds": 30,
+    "stops": [
+      {"operator": "KMB", "stop_id": "REPLACE_WITH_STOP_ID", "route": "1A", "service_type": 1, "label": "Home"},
+      {"operator": "CTB", "stop_id": "REPLACE_WITH_STOP_ID", "route": "2", "label": "Office"}
+    ]
+  },
+  "wallpaper": {
+    "rotate_seconds": 60,
+    "local_dir": "wallpapers",
+    "cache_dir": "cache/wallpapers",
+    "smb": {
+      "enabled": false,
+      "server": "",
+      "port": 445,
+      "share": "",
+      "path": "/",
+      "username": "",
+      "password": "",
+      "sync_seconds": 900,
+      "max_files": 50
+    }
+  }
+}
