@@ -1,84 +1,108 @@
-"""
-Weather Service for Muv
-Handles fetching and caching weather data from OpenWeatherMap API.
-"""
+"""Weather service for Muv: polls OpenWeatherMap on a background thread."""
 
-import threading
-import queue
-import requests
+import logging
 import time
-from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtGui import QPixmap
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-class WeatherService(QObject):
-    data_fetched = pyqtSignal(dict)
-    
-    def __init__(self):
-        super().__init__()
-        self.api_key = "YOUR_OPENWEATHERMAP_API_KEY"
-        self.city = "Hong Kong"
-        self.base_url = "https://api.openweathermap.org/data/2.5"
-        self.current_weather = None
-        self.forecast_data = None
-        self.is_running = False
-        self.timer = None
-        
-    def start(self):
-        """Start the weather service."""
-        self.is_running = True
-        self.fetch_weather()
-        
-    def stop(self):
-        """Stop the weather service."""
-        self.is_running = False
-        
-    def fetch_weather(self):
-        """Fetch current weather and forecast data."""
+import requests
+from PyQt6.QtCore import pyqtSignal
+
+from .base_service import PollingService
+from .errors import ConfigurationError, ServiceError, describe_request_error
+
+log = logging.getLogger(__name__)
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ICON_DIR = PROJECT_ROOT / "assets" / "icons" / "weather"
+
+ANIMATIONS = {
+    "Clear": "sun",
+    "Clouds": "cloud",
+    "Rain": "rain",
+    "Drizzle": "drizzle",
+    "Thunderstorm": "thunder",
+    "Snow": "snow",
+    "Mist": "mist",
+    "Haze": "mist",
+    "Fog": "mist",
+    "Smoke": "mist",
+    "Dust": "mist",
+    "Sand": "mist",
+    "Ash": "mist",
+    "Squall": "wind",
+    "Tornado": "wind",
+}
+
+
+class WeatherService(PollingService):
+    """Emits ``data_fetched({"current": ..., "forecast": ..., "fetched_at": ...})``.
+
+    ``current`` and ``forecast`` are the raw OpenWeatherMap JSON documents.
+    On failure nothing is emitted; ``error`` fires and the UI keeps the last data.
+    """
+
+    # object, not dict: PyQt converts dict signal arguments to QVariantMap.
+    data_fetched = pyqtSignal(object)
+
+    BASE_URL = "https://api.openweathermap.org/data/2.5"
+
+    def __init__(self, config, session: Optional[requests.Session] = None):
+        settings = config.section("weather")
+        super().__init__("weather", settings["refresh_seconds"], retry_interval=60)
+        self.api_key = str(settings.get("api_key") or "")
+        self.city = settings["city"]
+        self.units = settings["units"]
+        self.timeout = 10
+        self.session = session or requests.Session()
+        self._last_forecast: Optional[Dict[str, Any]] = None
+
+    def _get(self, endpoint: str) -> Dict[str, Any]:
+        params = {"q": self.city, "appid": self.api_key, "units": self.units}
         try:
-            # Fetch current weather
-            current_url = f"{self.base_url}/weather"
-            current_params = {
-                "q": self.city,
-                "appid": self.api_key,
-                "units": "metric"
-            }
-            current_response = requests.get(current_url, params=current_params)
-            if current_response.status_code == 200:
-                self.current_weather = current_response.json()
-                
-            # Fetch forecast data
-            forecast_url = f"{self.base_url}/forecast"
-            forecast_params = {
-                "q": self.city,
-                "appid": self.api_key,
-                "units": "metric"
-            }
-            forecast_response = requests.get(forecast_url, params=forecast_params)
-            if forecast_response.status_code == 200:
-                self.forecast_data = forecast_response.json()
-                
-            # Emit data
-            self.data_fetched.emit({
-                "current": self.current_weather,
-                "forecast": self.forecast_data
-            })
-            
-        except Exception as e:
-            print(f"Error fetching weather data: {e}")
-            
-    def get_weather_icon_path(self, icon_code):
-        """Get the path to the weather icon."""
-        return f"/assets/icons/weather/{icon_code}.png"
-        
-    def get_weather_animation(self, weather_condition):
-        """Get animation type for current weather."""
-        animations = {
-            "Clear": "sun",
-            "Clouds": "cloud",
-            "Rain": "rain",
-            "Drizzle": "drizzle",
-            "Thunderstorm": "thunder",
-            "Snow": "snow",
-            "Mist": "mist"
-        }
-        return animations.get(weather_condition, "sun")
+            response = self.session.get(f"{self.BASE_URL}/{endpoint}", params=params, timeout=self.timeout)
+            if response.status_code == 401:
+                raise ConfigurationError(
+                    "OpenWeatherMap rejected the API key (HTTP 401). "
+                    "New keys can take a while to activate."
+                )
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as exc:
+            # Do not use str(exc): it contains the URL, including the API key.
+            raise ServiceError(f"weather request failed ({describe_request_error(exc)})") from exc
+        except ValueError as exc:
+            raise ServiceError("weather response was not valid JSON") from exc
+
+    def poll(self) -> Optional[Dict[str, Any]]:
+        if not self.api_key or self.api_key.startswith("YOUR_"):
+            raise ConfigurationError(
+                "weather API key not set (weather.api_key or MUV_OPENWEATHER_API_KEY)"
+            )
+
+        current = self._get("weather")  # required: failure aborts this poll
+        if self.stopping:
+            return None
+        try:
+            self._last_forecast = self._get("forecast")
+        except ConfigurationError:
+            raise
+        except ServiceError as exc:
+            # Current conditions are still worth showing; reuse the last forecast.
+            log.warning("weather: forecast unavailable, reusing previous (%s)", exc)
+
+        return {"current": current, "forecast": self._last_forecast, "fetched_at": time.time()}
+
+    def publish(self, payload: Dict[str, Any]) -> None:
+        self.data_fetched.emit(payload)
+
+    @staticmethod
+    def get_weather_icon_path(icon_code: str) -> Optional[Path]:
+        """Path to a bundled icon, or None if the project has no such file."""
+        path = ICON_DIR / f"{icon_code}.png"
+        return path if path.is_file() else None
+
+    @staticmethod
+    def get_weather_animation(weather_condition: str) -> str:
+        """Animation name for an OpenWeatherMap condition group; "none" if unknown."""
+        return ANIMATIONS.get(weather_condition, "none")
