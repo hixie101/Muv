@@ -91,27 +91,22 @@ Muv draws on the Pi's own desktop, so run this in a terminal on the Pi itself. I
 Problems found in your config (a missing API key, an invalid stop) are logged at startup.
 
 ### Step 7: Configure Automatic Boot to GUI (Autostart)
-To launch the dashboard whenever the Pi boots to the desktop:
+Current Raspberry Pi OS releases run the **labwc** Wayland desktop, which starts programs from `~/.config/labwc/autostart`. (A `~/.config/autostart/*.desktop` entry did not launch Muv on a trixie/labwc Pi.) The project includes `run_muv.sh`, which starts Muv from its own folder and logs to `~/muv.log`.
 
-1. Create the autostart directory:
+1. Make sure the Pi boots to the desktop (`sudo raspi-config` → System Options → Boot / Auto Login → **Desktop Autologin**).
+2. Add the launcher to labwc's autostart. A user `autostart` file *replaces* the system one, so copy the system file first to keep the panel and desktop icons:
    ```bash
-   mkdir -p ~/.config/autostart
+   chmod +x ~/Muv/run_muv.sh
+   mkdir -p ~/.config/labwc
+   [ -f ~/.config/labwc/autostart ] || cp /etc/xdg/labwc/autostart ~/.config/labwc/autostart
+   echo "$HOME/Muv/run_muv.sh &" >> ~/.config/labwc/autostart
    ```
-2. Create a desktop entry:
-   ```bash
-   nano ~/.config/autostart/muv_dashboard.desktop
-   ```
-3. Paste the following (adjust the paths to your username and install location):
-   ```text
-   [Desktop Entry]
-   Type=Application
-   Name=Muv Dashboard
-   Path=/home/YOUR_USERNAME/Muv
-   Exec=/home/YOUR_USERNAME/Muv/venv/bin/python /home/YOUR_USERNAME/Muv/main.py
-   ```
-4. Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
+   If you cloned Muv somewhere other than `~/Muv`, change the path in the last line.
+3. Reboot (`sudo reboot`). Muv should appear fullscreen on the monitor a few seconds after the desktop loads.
 
-*Autostart behaviour depends on your Raspberry Pi OS version and whether it runs X11 or Wayland. If the entry doesn't launch Muv, check the Raspberry Pi documentation for your desktop session.*
+If it doesn't start, check `pgrep -af main.py` and read `~/muv.log` for the error. `run_muv.sh` also has commented-out lines for supplying the API key and SMB password as environment variables instead of keeping them in `config.json`.
+
+*Older Raspberry Pi OS releases that use an X11 desktop (LXDE-pi) use a different autostart mechanism and are untested here.*
 
 ---
 
@@ -120,6 +115,7 @@ To launch the dashboard whenever the Pi boots to the desktop:
 ```text
 Muv/
 ├── main.py                  # Entry point: wires services to the window, handles shutdown
+├── run_muv.sh               # Autostart launcher (logs to ~/muv.log)
 ├── config.example.json      # Copy to config.json and edit
 ├── requirements.txt
 ├── LICENSE
