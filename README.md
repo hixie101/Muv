@@ -43,6 +43,8 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install git python3-pip python3-venv python3-pyqt6 libxcb-cursor0 -y
 ```
 
+`libxcb-cursor0` is required by Qt 6.5+ to load its X11 display plugin; without it Muv aborts at startup with a "Could not load the Qt platform plugin xcb" error.
+
 ### Step 4: Clone the Project and Create a Virtual Environment
 ```bash
 git clone https://github.com/hixie101/Muv.git
@@ -83,6 +85,8 @@ Run it once by hand to check everything works (press **Esc** or **Q** to quit):
 ```bash
 python main.py
 ```
+
+Muv draws on the Pi's own desktop, so run this in a terminal on the Pi itself. If you are connected over SSH, point it at the desktop session instead, e.g. `DISPLAY=:0 python main.py` (X11), or on a Wayland desktop `XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-0 QT_QPA_PLATFORM=wayland python main.py`. To test your config and network settings without a screen, use `QT_QPA_PLATFORM=offscreen python main.py`.
 
 Problems found in your config (a missing API key, an invalid stop) are logged at startup.
 
