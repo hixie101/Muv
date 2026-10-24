@@ -40,7 +40,7 @@ sudo apt update && sudo apt upgrade -y
 
 ### Step 3: Install System Dependencies
 ```bash
-sudo apt install git python3-pip python3-venv python3-pyqt6 -y
+sudo apt install git python3-pip python3-venv python3-pyqt6 libxcb-cursor0 -y
 ```
 
 ### Step 4: Clone the Project and Create a Virtual Environment
