@@ -1,0 +1,4 @@
+# PyQt6 is installed from apt on Raspberry Pi OS (python3-pyqt6); see README.
+requests>=2.31
+# Only needed if wallpaper.smb.enabled is true:
+pysmb>=1.2.9
