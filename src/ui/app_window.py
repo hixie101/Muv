@@ -182,9 +182,14 @@ class AppWindow(QWidget):
         self.background = BackgroundWidget(display["fade_ms"], self)
         self.content = QWidget(self)  # created after the background, so it stacks on top
 
-        self.time_label = OutlinedLabel(objectName="time")
-        self.time24_label = OutlinedLabel(objectName="time24")
-        self.date_label = OutlinedLabel(objectName="date")
+        # The three clock labels are positioned by hand (see _layout_clock) instead of by a
+        # layout, so the 24-hour clock can sit close under the main one without clipping
+        # the main clock's descenders (the tail of a lowercase "p", for example).
+        self.clock_block = QWidget()
+        self._main_ascent = 0
+        self.time_label = OutlinedLabel(parent=self.clock_block, objectName="time")
+        self.time24_label = OutlinedLabel(parent=self.clock_block, objectName="time24")
+        self.date_label = OutlinedLabel(parent=self.clock_block, objectName="date")
         self.weather_title = QLabel("Weather", objectName="panelTitle")
         self.weather_body = QLabel(objectName="body")
         self.bus_title = QLabel("Buses", objectName="panelTitle")
@@ -197,16 +202,9 @@ class AppWindow(QWidget):
         if not self._secondary_time_format:
             self.time24_label.hide()
 
-        clock_box = QVBoxLayout()
-        clock_box.setSpacing(0)
-        clock_box.addWidget(self.time_label)
-        clock_box.addWidget(self.time24_label)
-        clock_box.addWidget(self.date_label)
-        clock_box.addStretch()
-
         weather_panel = self._panel(self.weather_title, self.weather_body)
         top = QHBoxLayout()
-        top.addLayout(clock_box)
+        top.addWidget(self.clock_block, 0, Qt.AlignmentFlag.AlignTop)
         top.addStretch()
         top.addWidget(weather_panel, 0, Qt.AlignmentFlag.AlignTop)
 
@@ -295,8 +293,7 @@ class AppWindow(QWidget):
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         main_halo = halo(main_px)
         self.time_label.set_halo(main_halo)
-        gap = round(self._clock_gap * self._scale)  # not _px(): 0 must stay 0
-        self.time_label.setFixedHeight(QFontMetrics(main_font).ascent() + math.ceil(main_halo) + gap)
+        self._main_ascent = QFontMetrics(main_font).ascent()
 
         small_px = self._px(CLOCK_PX / SECONDARY_CLOCK_RATIO)
         small_font = QFont(self.time24_label.font())
@@ -309,6 +306,32 @@ class AppWindow(QWidget):
         date_font.setPixelSize(date_px)
         self.date_label.setFont(date_font)
         self.date_label.set_halo(halo(date_px))
+        self._layout_clock()
+
+    def _layout_clock(self) -> None:
+        """Position the three clock labels inside ``clock_block``.
+
+        The 24-hour clock starts just below the main clock's baseline (plus halo and
+        ``clock_gap``) instead of below its full line box, which removes the big empty
+        space under the digits. The main label keeps its full natural height, so a
+        descender (the tail of a "p") is never clipped; it simply extends behind the
+        transparent 24-hour label.
+        """
+        halo = math.ceil(self.time_label._halo)
+        gap = round(self._clock_gap * self._scale)  # not _px(): 0 must stay 0
+        main = self.time_label.sizeHint()
+        small = self.time24_label.sizeHint() if self._secondary_time_format else QSize(0, 0)
+        date = self.date_label.sizeHint()
+
+        small_y = self._main_ascent + halo + gap
+        date_y = small_y + small.height()
+        self.time_label.setGeometry(0, 0, main.width(), main.height())
+        self.time24_label.setGeometry(0, small_y, small.width(), small.height())
+        self.date_label.setGeometry(0, date_y, date.width(), date.height())
+        self.clock_block.setFixedSize(
+            max(main.width(), small.width(), date.width()),
+            max(main.height(), date_y + date.height()),
+        )
 
     # ---- slots ---------------------------------------------------------
     @staticmethod
@@ -329,6 +352,7 @@ class AppWindow(QWidget):
             self.time_label.setText(main)
             self.time24_label.setText(secondary)
             self.date_label.setText(now.strftime(self._date_format))
+            self._layout_clock()
 
     def update_weather(self, payload: Dict[str, Any]) -> None:
         self._last_weather = payload
