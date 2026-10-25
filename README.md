@@ -153,3 +153,21 @@ This project is licensed under the **Creative Commons Attribution-NonCommercial 
 If you want to deploy this software in a commercial environment, please open an issue or contact the repository owner to negotiate a commercial-use waiver.
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
+
+
+---
+
+## Updating Muv
+
+To update Muv on your Pi to the latest version from GitHub, SSH in (or open a terminal on the Pi) and run:
+
+```bash
+cd ~/Muv && git pull && sudo reboot
+```
+
+This downloads the latest code and restarts the Pi so the new version starts automatically. Your `config.json` and `venv/` folder are not tracked by git, so your settings are kept.
+
+- **New dependencies:** if an update changes `requirements.txt`, run `source venv/bin/activate && pip install -r requirements.txt` before rebooting.
+- **If `git pull` refuses** because you edited files on the Pi, either undo your edits with `git checkout -- .` (this discards changes to tracked files) or save them aside with `git stash`, then run the update command again.
+- **New settings:** new releases may add options to `config.example.json`. Your existing `config.json` keeps working because anything you don't set falls back to a default; copy across any new options you want to change.
+- **Checking the result:** after the reboot, `tail -n 30 ~/muv.log` shows whether Muv started cleanly.
