@@ -138,6 +138,10 @@ class OutlinedLabel(QLabel):
         if key != self._path_key:
             path = QPainterPath()
             path.addText(0.0, float(QFontMetrics(font).ascent()), font, text)  # top-aligned baseline
+            # Glyph outlines often contain overlapping contours (variable or emboldened fonts).
+            # The default odd-even rule turns each overlap into a hole in the fill, letting the
+            # black stroke underneath show through the letters. Winding fills overlaps solid.
+            path.setFillRule(Qt.FillRule.WindingFill)
             self._path, self._path_key = path, key
 
         painter = QPainter(self)
