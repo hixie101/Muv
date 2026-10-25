@@ -34,7 +34,7 @@ class BackgroundWidget(QWidget):
         self._animation = QVariantAnimation(self)
         self._animation.setStartValue(0.0)
         self._animation.setEndValue(1.0)
-        self._animation.setDuration(max(0, int(fade_ms)))
+        self._animation.setDuration(max(2, int(fade_ms)))
         self._animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self._animation.valueChanged.connect(self._on_fade_step)
         self._animation.finished.connect(self._on_fade_done)
