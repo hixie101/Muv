@@ -24,6 +24,7 @@ DEFAULTS = {
         "fade_ms": 1000,
         "time_format": "%I:%M %p",
         "secondary_time_format": "%H:%M",
+        "clock_gap": 4,
         "date_format": "%A, %d %B %Y",
     },
     "weather": {
@@ -63,6 +64,7 @@ ENV_OVERRIDES = {
 # config path -> smallest allowed value
 MINIMUMS = {
     "display.fade_ms": 0,
+    "display.clock_gap": 0,
     "weather.refresh_seconds": 60,
     "transit.refresh_seconds": 10,
     "wallpaper.rotate_seconds": 5,
