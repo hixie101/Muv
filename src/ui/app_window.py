@@ -6,11 +6,13 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from PyQt6.QtCore import QEasingCurve, Qt, QVariantAnimation
-from PyQt6.QtGui import QColor, QImage, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPixmap
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 log = logging.getLogger(__name__)
 
+CLOCK_PX = 150            # main clock font size at 1080p
+SECONDARY_CLOCK_RATIO = 4  # the 24-hour clock is 1/4 the size of the main clock
 MAX_BUS_ROWS = 8
 FORECAST_SLOTS = 4  # OpenWeatherMap forecasts are 3-hourly, so this covers ~12 hours
 MUTED = "#9aa4b2"
@@ -98,6 +100,7 @@ class AppWindow(QWidget):
         display = config.section("display")
         self._time_format = display["time_format"]
         self._secondary_time_format = display["secondary_time_format"]  # "" hides the second clock
+        self._clock_gap = display["clock_gap"]  # extra px (at 1080p) between the two clocks
         self._date_format = display["date_format"]
         self._fullscreen = bool(display["fullscreen"])
         self._unit = UNIT_SYMBOLS.get(config.get("weather.units"), "K")
@@ -130,6 +133,7 @@ class AppWindow(QWidget):
             self.time24_label.hide()
 
         clock_box = QVBoxLayout()
+        clock_box.setSpacing(0)
         clock_box.addWidget(self.time_label)
         clock_box.addWidget(self.time24_label)
         clock_box.addWidget(self.date_label)
@@ -191,8 +195,6 @@ class AppWindow(QWidget):
             f"""
             QLabel {{ color: #f4f6fa; background: transparent; }}
             QFrame#panel {{ background-color: rgba(8, 12, 20, 165); border-radius: {px(18)}px; }}
-            QLabel#time {{ font-size: {px(150)}px; font-weight: 600; }}
-            QLabel#time24 {{ font-size: {px(75)}px; }}
             QLabel#date {{ font-size: {px(38)}px; }}
             QLabel#panelTitle {{ font-size: {px(24)}px; color: {MUTED}; }}
             QLabel#body {{ font-size: {px(30)}px; }}
@@ -202,10 +204,30 @@ class AppWindow(QWidget):
         margin = px(48)
         self.root.setContentsMargins(margin, margin, margin, margin)
         self.root.setSpacing(px(16))
+        self._style_clock()
         for panel in self.content.findChildren(QFrame, "panel"):
             panel.layout().setContentsMargins(px(28), px(20), px(28), px(20))
         self._render_weather()
         self._render_bus()
+
+    def _style_clock(self) -> None:
+        """Size both clocks and pull the 24-hour clock up under the main one.
+
+        A big font's line box has a lot of empty space below the digits (room for
+        descenders that digits and AM/PM never use). Cutting the main clock's height
+        down to its ascent plus a small gap removes that space.
+        """
+        main_font = QFont(self.time_label.font())
+        main_font.setPixelSize(self._px(CLOCK_PX))
+        main_font.setWeight(QFont.Weight.DemiBold)
+        self.time_label.setFont(main_font)
+        self.time_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        gap = round(self._clock_gap * self._scale)  # not _px(): 0 must stay 0
+        self.time_label.setFixedHeight(QFontMetrics(main_font).ascent() + gap)
+
+        small_font = QFont(self.time24_label.font())
+        small_font.setPixelSize(self._px(CLOCK_PX / SECONDARY_CLOCK_RATIO))
+        self.time24_label.setFont(small_font)
 
     # ---- slots ---------------------------------------------------------
     @staticmethod
