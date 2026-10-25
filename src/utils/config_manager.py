@@ -22,7 +22,8 @@ DEFAULTS = {
         "fullscreen": True,
         "hide_cursor": True,
         "fade_ms": 1000,
-        "time_format": "%H:%M",
+        "time_format": "%I:%M %p",
+        "secondary_time_format": "%H:%M",
         "date_format": "%A, %d %B %Y",
     },
     "weather": {

@@ -97,13 +97,14 @@ class AppWindow(QWidget):
         self.config = config
         display = config.section("display")
         self._time_format = display["time_format"]
+        self._secondary_time_format = display["secondary_time_format"]  # "" hides the second clock
         self._date_format = display["date_format"]
         self._fullscreen = bool(display["fullscreen"])
         self._unit = UNIT_SYMBOLS.get(config.get("weather.units"), "K")
         self._errors: Dict[str, str] = {}
         self._last_weather: Optional[Dict[str, Any]] = None
         self._last_bus: Optional[Dict[str, Any]] = None
-        self._time_text = ""
+        self._time_key = None
         self._scale = 1.0
 
         self.setWindowTitle("Muv")
@@ -114,6 +115,7 @@ class AppWindow(QWidget):
         self.content = QWidget(self)  # created after the background, so it stacks on top
 
         self.time_label = QLabel(objectName="time")
+        self.time24_label = QLabel(objectName="time24")
         self.date_label = QLabel(objectName="date")
         self.weather_title = QLabel("Weather", objectName="panelTitle")
         self.weather_body = QLabel(objectName="body")
@@ -124,9 +126,12 @@ class AppWindow(QWidget):
             label.setTextFormat(Qt.TextFormat.RichText)
         self.status_label.setWordWrap(True)
         self.status_label.hide()
+        if not self._secondary_time_format:
+            self.time24_label.hide()
 
         clock_box = QVBoxLayout()
         clock_box.addWidget(self.time_label)
+        clock_box.addWidget(self.time24_label)
         clock_box.addWidget(self.date_label)
         clock_box.addStretch()
 
@@ -187,6 +192,7 @@ class AppWindow(QWidget):
             QLabel {{ color: #f4f6fa; background: transparent; }}
             QFrame#panel {{ background-color: rgba(8, 12, 20, 165); border-radius: {px(18)}px; }}
             QLabel#time {{ font-size: {px(150)}px; font-weight: 600; }}
+            QLabel#time24 {{ font-size: {px(75)}px; }}
             QLabel#date {{ font-size: {px(38)}px; }}
             QLabel#panelTitle {{ font-size: {px(24)}px; color: {MUTED}; }}
             QLabel#body {{ font-size: {px(30)}px; }}
@@ -202,12 +208,23 @@ class AppWindow(QWidget):
         self._render_bus()
 
     # ---- slots ---------------------------------------------------------
+    @staticmethod
+    def _format_clock(now: datetime, fmt: str) -> str:
+        text = now.strftime(fmt)
+        if "%p" in fmt:
+            text = text.upper()  # some locales give "pm"; show "PM"
+        if "%I" in fmt:
+            text = text.lstrip("0")  # 09:05 PM -> 9:05 PM
+        return text
+
     def update_time(self) -> None:
         now = datetime.now()
-        text = now.strftime(self._time_format)
-        if text != self._time_text:  # skip redundant repaints
-            self._time_text = text
-            self.time_label.setText(text)
+        main = self._format_clock(now, self._time_format)
+        secondary = self._format_clock(now, self._secondary_time_format) if self._secondary_time_format else ""
+        if (main, secondary) != self._time_key:  # skip redundant repaints
+            self._time_key = (main, secondary)
+            self.time_label.setText(main)
+            self.time24_label.setText(secondary)
             self.date_label.setText(now.strftime(self._date_format))
 
     def update_weather(self, payload: Dict[str, Any]) -> None:
