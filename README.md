@@ -78,6 +78,8 @@ At minimum, set:
 
   Entries still containing `REPLACE_WITH_STOP_ID` are ignored. You can look up stop IDs in the operators' open data: for KMB, `https://data.etabus.gov.hk/v1/transport/kmb/stop` lists every stop; for Citybus, `https://rt.data.gov.hk/v2/transport/citybus/route-stop/CTB/<route>/outbound` (or `inbound`) lists a route's stops. Details are on [data.gov.hk](https://data.gov.hk).
 
+Clock: the main clock shows 12-hour time with AM/PM and a smaller 24-hour time sits below it. Change them with `display.time_format` (default `"%I:%M %p"`) and `display.secondary_time_format` (default `"%H:%M"`; set it to `""` to hide the second clock). `display.date_format` controls the date line. These are standard Python `strftime` codes.
+
 Wallpapers: drop images (`.jpg`, `.png`, `.bmp`, `.webp`) into a `wallpapers/` folder in the project, or enable `wallpaper.smb` to mirror a folder from a network share (SMB passwords can be supplied via `MUV_SMB_PASSWORD`). `config.json` is git-ignored so your keys and passwords are not committed.
 
 Run it once by hand to check everything works (press **Esc** or **Q** to quit):
