@@ -2,15 +2,20 @@
 
 import html
 import logging
+import math
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from PyQt6.QtCore import QEasingCurve, Qt, QVariantAnimation
-from PyQt6.QtGui import QColor, QImage, QPainter, QPixmap
+from PyQt6.QtCore import QEasingCurve, QSize, Qt, QVariantAnimation
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPainterPath, QPen, QPixmap
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 log = logging.getLogger(__name__)
 
+CLOCK_PX = 150            # main clock font size at 1080p
+SECONDARY_CLOCK_RATIO = 4  # the 24-hour clock is 1/4 the size of the main clock
+DATE_PX = 38              # date font size at 1080p
+TEXT_COLOR = "#f4f6fa"
 MAX_BUS_ROWS = 8
 FORECAST_SLOTS = 4  # OpenWeatherMap forecasts are 3-hourly, so this covers ~12 hours
 MUTED = "#9aa4b2"
@@ -29,7 +34,7 @@ class BackgroundWidget(QWidget):
         self._animation = QVariantAnimation(self)
         self._animation.setStartValue(0.0)
         self._animation.setEndValue(1.0)
-        self._animation.setDuration(max(0, int(fade_ms)))
+        self._animation.setDuration(max(2, int(fade_ms)))
         self._animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self._animation.valueChanged.connect(self._on_fade_step)
         self._animation.finished.connect(self._on_fade_done)
@@ -89,6 +94,67 @@ class BackgroundWidget(QWidget):
         painter.end()
 
 
+class OutlinedLabel(QLabel):
+    """A label whose (plain, left-aligned) text has a dark halo so it stays readable on any wallpaper.
+
+    Qt style sheets cannot outline text, so the text is drawn as a path: stroked in
+    black first, then filled on top so only the outer half of the stroke shows.
+    The path is cached and rebuilt only when the text or font changes.
+    """
+
+    def __init__(self, text: str = "", parent=None, **kwargs):
+        super().__init__(text, parent, **kwargs)
+        self._halo = 0.0
+        self._path: Optional[QPainterPath] = None
+        self._path_key = None
+
+    def set_halo(self, thickness_px: float) -> None:
+        """Visible halo thickness in pixels; 0 draws ordinary text."""
+        thickness_px = max(0.0, float(thickness_px))
+        if thickness_px != self._halo:
+            self._halo = thickness_px
+            self.updateGeometry()
+            self.update()
+
+    def _pad(self) -> int:
+        return math.ceil(self._halo) + 1 if self._halo > 0 else 0
+
+    def sizeHint(self) -> QSize:
+        hint = super().sizeHint()
+        return QSize(hint.width() + 2 * self._pad(), hint.height())
+
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        return QSize(hint.width() + 2 * self._pad(), hint.height())
+
+    def paintEvent(self, event) -> None:
+        text = self.text()
+        if self._halo <= 0 or not text:
+            super().paintEvent(event)
+            return
+
+        font = self.font()
+        key = (text, font.toString())
+        if key != self._path_key:
+            path = QPainterPath()
+            path.addText(0.0, float(QFontMetrics(font).ascent()), font, text)  # top-aligned baseline
+            # Glyph outlines often contain overlapping contours (variable or emboldened fonts).
+            # The default odd-even rule turns each overlap into a hole in the fill, letting the
+            # black stroke underneath show through the letters. Winding fills overlaps solid.
+            path.setFillRule(Qt.FillRule.WindingFill)
+            self._path, self._path_key = path, key
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.translate(self._pad(), 0)  # leave room for the halo at the left edge
+        # The stroke is centred on the glyph edge, so double the width to get the visible thickness.
+        pen = QPen(QColor(0, 0, 0), self._halo * 2, Qt.PenStyle.SolidLine,
+                   Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        painter.strokePath(self._path, pen)
+        painter.fillPath(self._path, QColor(TEXT_COLOR))
+        painter.end()
+
+
 class AppWindow(QWidget):
     """Slots (update_time/update_weather/update_bus/update_background/set_error) run on the GUI thread."""
 
@@ -98,6 +164,8 @@ class AppWindow(QWidget):
         display = config.section("display")
         self._time_format = display["time_format"]
         self._secondary_time_format = display["secondary_time_format"]  # "" hides the second clock
+        self._clock_gap = display["clock_gap"]  # extra px (at 1080p) between the two clocks
+        self._text_outline = display["text_outline"]  # halo thickness (px at 1080p) on the main clock
         self._date_format = display["date_format"]
         self._fullscreen = bool(display["fullscreen"])
         self._unit = UNIT_SYMBOLS.get(config.get("weather.units"), "K")
@@ -114,9 +182,14 @@ class AppWindow(QWidget):
         self.background = BackgroundWidget(display["fade_ms"], self)
         self.content = QWidget(self)  # created after the background, so it stacks on top
 
-        self.time_label = QLabel(objectName="time")
-        self.time24_label = QLabel(objectName="time24")
-        self.date_label = QLabel(objectName="date")
+        # The three clock labels are positioned by hand (see _layout_clock) instead of by a
+        # layout, so the 24-hour clock can sit close under the main one without clipping
+        # the main clock's descenders (the tail of a lowercase "p", for example).
+        self.clock_block = QWidget()
+        self._main_ascent = 0
+        self.time_label = OutlinedLabel(parent=self.clock_block, objectName="time")
+        self.time24_label = OutlinedLabel(parent=self.clock_block, objectName="time24")
+        self.date_label = OutlinedLabel(parent=self.clock_block, objectName="date")
         self.weather_title = QLabel("Weather", objectName="panelTitle")
         self.weather_body = QLabel(objectName="body")
         self.bus_title = QLabel("Buses", objectName="panelTitle")
@@ -129,15 +202,9 @@ class AppWindow(QWidget):
         if not self._secondary_time_format:
             self.time24_label.hide()
 
-        clock_box = QVBoxLayout()
-        clock_box.addWidget(self.time_label)
-        clock_box.addWidget(self.time24_label)
-        clock_box.addWidget(self.date_label)
-        clock_box.addStretch()
-
         weather_panel = self._panel(self.weather_title, self.weather_body)
         top = QHBoxLayout()
-        top.addLayout(clock_box)
+        top.addWidget(self.clock_block, 0, Qt.AlignmentFlag.AlignTop)
         top.addStretch()
         top.addWidget(weather_panel, 0, Qt.AlignmentFlag.AlignTop)
 
@@ -189,11 +256,8 @@ class AppWindow(QWidget):
         px = self._px
         self.setStyleSheet(
             f"""
-            QLabel {{ color: #f4f6fa; background: transparent; }}
+            QLabel {{ color: {TEXT_COLOR}; background: transparent; }}
             QFrame#panel {{ background-color: rgba(8, 12, 20, 165); border-radius: {px(18)}px; }}
-            QLabel#time {{ font-size: {px(150)}px; font-weight: 600; }}
-            QLabel#time24 {{ font-size: {px(75)}px; }}
-            QLabel#date {{ font-size: {px(38)}px; }}
             QLabel#panelTitle {{ font-size: {px(24)}px; color: {MUTED}; }}
             QLabel#body {{ font-size: {px(30)}px; }}
             QLabel#status {{ font-size: {px(22)}px; color: #ffb4a8; }}
@@ -202,10 +266,72 @@ class AppWindow(QWidget):
         margin = px(48)
         self.root.setContentsMargins(margin, margin, margin, margin)
         self.root.setSpacing(px(16))
+        self._style_clock()
         for panel in self.content.findChildren(QFrame, "panel"):
             panel.layout().setContentsMargins(px(28), px(20), px(28), px(20))
         self._render_weather()
         self._render_bus()
+
+    def _style_clock(self) -> None:
+        """Size the clocks and date, give them a halo, and pull the 24-hour clock up under the main one.
+
+        A big font's line box has a lot of empty space below the digits (room for
+        descenders that digits and AM/PM never use). Cutting the main clock's height
+        down to its ascent plus the halo and a small gap removes that space.
+        """
+        outline = self._text_outline * self._scale
+        main_px = self._px(CLOCK_PX)
+
+        def halo(size_px: int) -> float:
+            # Smaller text gets a proportionally thinner (but never negligible) halo.
+            return 0.0 if outline <= 0 else outline * (0.5 + 0.5 * size_px / main_px)
+
+        main_font = QFont(self.time_label.font())
+        main_font.setPixelSize(main_px)
+        main_font.setWeight(QFont.Weight.DemiBold)
+        self.time_label.setFont(main_font)
+        self.time_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        main_halo = halo(main_px)
+        self.time_label.set_halo(main_halo)
+        self._main_ascent = QFontMetrics(main_font).ascent()
+
+        small_px = self._px(CLOCK_PX / SECONDARY_CLOCK_RATIO)
+        small_font = QFont(self.time24_label.font())
+        small_font.setPixelSize(small_px)
+        self.time24_label.setFont(small_font)
+        self.time24_label.set_halo(halo(small_px))
+
+        date_px = self._px(DATE_PX)
+        date_font = QFont(self.date_label.font())
+        date_font.setPixelSize(date_px)
+        self.date_label.setFont(date_font)
+        self.date_label.set_halo(halo(date_px))
+        self._layout_clock()
+
+    def _layout_clock(self) -> None:
+        """Position the three clock labels inside ``clock_block``.
+
+        The 24-hour clock starts just below the main clock's baseline (plus halo and
+        ``clock_gap``) instead of below its full line box, which removes the big empty
+        space under the digits. The main label keeps its full natural height, so a
+        descender (the tail of a "p") is never clipped; it simply extends behind the
+        transparent 24-hour label.
+        """
+        halo = math.ceil(self.time_label._halo)
+        gap = round(self._clock_gap * self._scale)  # not _px(): 0 must stay 0
+        main = self.time_label.sizeHint()
+        small = self.time24_label.sizeHint() if self._secondary_time_format else QSize(0, 0)
+        date = self.date_label.sizeHint()
+
+        small_y = self._main_ascent + halo + gap
+        date_y = small_y + small.height()
+        self.time_label.setGeometry(0, 0, main.width(), main.height())
+        self.time24_label.setGeometry(0, small_y, small.width(), small.height())
+        self.date_label.setGeometry(0, date_y, date.width(), date.height())
+        self.clock_block.setFixedSize(
+            max(main.width(), small.width(), date.width()),
+            max(main.height(), date_y + date.height()),
+        )
 
     # ---- slots ---------------------------------------------------------
     @staticmethod
@@ -226,6 +352,7 @@ class AppWindow(QWidget):
             self.time_label.setText(main)
             self.time24_label.setText(secondary)
             self.date_label.setText(now.strftime(self._date_format))
+            self._layout_clock()
 
     def update_weather(self, payload: Dict[str, Any]) -> None:
         self._last_weather = payload
