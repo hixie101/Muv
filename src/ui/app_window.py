@@ -10,6 +10,9 @@ from PyQt6.QtCore import QEasingCurve, QSize, Qt, QVariantAnimation
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPainterPath, QPen, QPixmap
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from .effect_models import NONE, PREVIEW_SPECS, EffectSpec, effect_for_weather
+from .weather_effects import FogLayer, FrontLayer
+
 log = logging.getLogger(__name__)
 
 CLOCK_PX = 150            # main clock font size at 1080p
@@ -34,7 +37,7 @@ class BackgroundWidget(QWidget):
         self._animation = QVariantAnimation(self)
         self._animation.setStartValue(0.0)
         self._animation.setEndValue(1.0)
-        self._animation.setDuration(max(2, int(fade_ms)))
+        self._animation.setDuration(max(0, int(fade_ms)))
         self._animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self._animation.valueChanged.connect(self._on_fade_step)
         self._animation.finished.connect(self._on_fade_done)
@@ -169,6 +172,8 @@ class AppWindow(QWidget):
         self._date_format = display["date_format"]
         self._fullscreen = bool(display["fullscreen"])
         self._unit = UNIT_SYMBOLS.get(config.get("weather.units"), "K")
+        self._animations = bool(display["weather_animations"])
+        self._preview = display["weather_preview"]  # force an effect for testing; "" = use the real weather
         self._errors: Dict[str, str] = {}
         self._last_weather: Optional[Dict[str, Any]] = None
         self._last_bus: Optional[Dict[str, Any]] = None
@@ -180,7 +185,10 @@ class AppWindow(QWidget):
             self.setCursor(Qt.CursorShape.BlankCursor)
 
         self.background = BackgroundWidget(display["fade_ms"], self)
-        self.content = QWidget(self)  # created after the background, so it stacks on top
+        # Stacking order (later children are on top): wallpaper, fog, clock and panels, rain/lightning.
+        self.fog_layer = FogLayer(self, display["animation_fps"])
+        self.content = QWidget(self)
+        self.front_layer = FrontLayer(self, display["animation_fps"])
 
         # The three clock labels are positioned by hand (see _layout_clock) instead of by a
         # layout, so the 24-hour clock can sit close under the main one without clipping
@@ -215,6 +223,7 @@ class AppWindow(QWidget):
         self.root.addWidget(self.status_label)
 
         self.update_time()
+        self._set_effect(self._effect_for(None))  # applies display.weather_preview at startup
         self._render_weather()
         self._render_bus()
         self._apply_scale()
@@ -238,6 +247,8 @@ class AppWindow(QWidget):
     def resizeEvent(self, event) -> None:
         self.background.setGeometry(self.rect())
         self.content.setGeometry(self.rect())
+        self.fog_layer.setGeometry(self.rect())
+        self.front_layer.setGeometry(self.rect())
         self._apply_scale()
         super().resizeEvent(event)
 
@@ -358,6 +369,21 @@ class AppWindow(QWidget):
         self._last_weather = payload
         self.clear_error("weather")
         self._render_weather()
+        self._set_effect(self._effect_for(payload))
+
+    def _effect_for(self, payload: Optional[Dict[str, Any]]) -> EffectSpec:
+        """The weather effect to show: none if disabled, the preview if set, otherwise from the weather."""
+        if not self._animations:
+            return NONE
+        if self._preview:
+            return PREVIEW_SPECS[self._preview]
+        current = (payload or {}).get("current") or {}
+        conditions = (current.get("weather") or [{}])[0]
+        return effect_for_weather(conditions.get("id"), conditions.get("main"))
+
+    def _set_effect(self, spec: EffectSpec) -> None:
+        self.fog_layer.set_spec(spec)
+        self.front_layer.set_spec(spec)
 
     def update_bus(self, payload: Dict[str, Any]) -> None:
         self._last_bus = payload
