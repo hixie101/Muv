@@ -168,15 +168,41 @@ If you want to deploy this software in a commercial environment, please open an 
 
 ## Updating Muv
 
-To update Muv on your Pi to the latest version from GitHub, SSH in (or open a terminal on the Pi) and run:
+The Muv repository has two branches:
+
+- **`main`:** the stable version. Use this unless you want to try new features.
+- **`dev`:** the development version, with newer changes that may be less tested.
+
+A fresh `git clone` starts on `main`. To update Muv on your Pi, SSH in (or open a terminal on the Pi) and run the commands for the branch you want. Each one downloads the latest code and reboots the Pi so the new version starts automatically.
+
+**Update from `main`:**
+
+```bash
+cd ~/Muv && git fetch origin && git checkout main && git pull && sudo reboot
+```
+
+**Update from `dev`:**
+
+```bash
+cd ~/Muv && git fetch origin && git checkout dev && git pull && sudo reboot
+```
+
+You can switch between the two at any time with the same commands. Your `config.json` and `venv/` folder are not tracked by git, so your settings are kept when you switch.
+
+**Already on the branch you want?** A plain pull is enough:
 
 ```bash
 cd ~/Muv && git pull && sudo reboot
 ```
 
-This downloads the latest code and restarts the Pi so the new version starts automatically. Your `config.json` and `venv/` folder are not tracked by git, so your settings are kept.
+To see which branch the Pi is on, run `git branch --show-current` inside `~/Muv`.
+
+**Installing a branch from scratch:** add `-b` to the clone command in Step 4, for example `git clone -b dev https://github.com/hixie101/Muv.git`.
+
+### Notes
 
 - **New dependencies:** if an update changes `requirements.txt`, run `source venv/bin/activate && pip install -r requirements.txt` before rebooting.
-- **If `git pull` refuses** because you edited files on the Pi, either undo your edits with `git checkout -- .` (this discards changes to tracked files) or save them aside with `git stash`, then run the update command again.
-- **New settings:** new releases may add options to `config.example.json`. Your existing `config.json` keeps working because anything you don't set falls back to a default; copy across any new options you want to change.
+- **If `git checkout` or `git pull` refuses** because you edited files on the Pi, either undo your edits with `git checkout -- .` (this discards changes to tracked files) or save them aside with `git stash`, then run the update command again.
+- **New settings:** the branches can have different options in `config.example.json`. Your existing `config.json` keeps working because anything you don't set falls back to a default, and options a branch doesn't know about are ignored. Copy across any new options you want to change.
+- **Going back:** if a `dev` update causes problems, switch back with the `main` command above.
 - **Checking the result:** after the reboot, `tail -n 30 ~/muv.log` shows whether Muv started cleanly.
