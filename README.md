@@ -7,6 +7,7 @@
 ## Features
 - **Real-time data:** Weather from OpenWeatherMap and bus ETAs from the official KMB and Citybus open-data APIs, refreshed on a timer.
 - **Background threads:** Each data source polls on its own thread with request timeouts, so a slow or dead network never freezes the clock or the animations. If a refresh fails, the last good data stays on screen and a small status line explains what went wrong.
+- **Weather animations:** The screen reacts to the current weather: falling rain with drops running down the "glass", lightning in thunderstorms, and drifting fog or haze when visibility is low. Clear and cloudy weather show nothing. Rain and drops scale with intensity (drizzle, rain, heavy rain).
 - **Rotating wallpapers:** Cross-fades between images from a local folder or an SMB/CIFS network share. The fade length is configurable (`display.fade_ms`; set `0` to disable on slower boards).
 - **Configurable:** Everything is set in `config.json`; secrets can come from environment variables instead.
 
@@ -80,6 +81,12 @@ At minimum, set:
 
 Clock: the main clock shows 12-hour time with AM/PM and a smaller 24-hour time sits below it. Change them with `display.time_format` (default `"%I:%M %p"`) and `display.secondary_time_format` (default `"%H:%M"`; set it to `""` to hide the second clock). `display.date_format` controls the date line. These are standard Python `strftime` codes. The 24-hour clock is a quarter of the main clock's font size and sits right under it; `display.clock_gap` (default `4`, in pixels at 1080p) adds extra space between the two, so raise it if they look too cramped. The clock and date are drawn with a black halo so they stay readable on light wallpapers; `display.text_outline` sets its thickness in pixels at 1080p (default `4`; smaller text gets a proportionally thinner halo; `0` turns it off).
 
+Weather animations: these follow the current conditions reported by OpenWeatherMap (clear and cloudy skies show no effect, and snow has no effect yet). Settings under `display`:
+
+- `weather_animations` (default `true`): set to `false` to turn all effects off.
+- `animation_fps` (default `20`, range 5 to 60): frame rate of the rain, drops and lightning (fog is capped at 12 because it drifts slowly). Lower it, or turn animations off, if the display looks choppy on a slower Pi; every frame redraws the screen.
+- `weather_preview` (default `""`): force an effect so you can see it without waiting for the weather. One of `"clear"`, `"drizzle"`, `"rain"`, `"heavy_rain"`, `"thunderstorm"`, `"mist"`, `"fog"`, `"haze"`. Set it back to `""` afterwards.
+
 Wallpapers: drop images (`.jpg`, `.png`, `.bmp`, `.webp`) into a `wallpapers/` folder in the project, or enable `wallpaper.smb` to mirror a folder from a network share (SMB passwords can be supplied via `MUV_SMB_PASSWORD`). `config.json` is git-ignored so your keys and passwords are not committed.
 
 Run it once by hand to check everything works (press **Esc** or **Q** to quit):
@@ -131,7 +138,9 @@ Muv/
 │   │   ├── smb_service.py        # Wallpaper rotation, optional SMB mirroring
 │   │   └── errors.py
 │   ├── ui/
-│   │   └── app_window.py         # Window, wallpaper cross-fade, clock/weather/bus panels
+│   │   ├── app_window.py         # Window, wallpaper cross-fade, clock/weather/bus panels
+│   │   ├── weather_effects.py    # Rain, drops, lightning and fog drawn over the window
+│   │   └── effect_models.py      # Which effect matches the weather, plus the animation maths (no Qt)
 │   └── utils/
 │       └── config_manager.py     # Loads and validates config.json
 └── tests/                        # python3 -m unittest discover -s tests -t .
