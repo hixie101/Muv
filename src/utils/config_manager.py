@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 from typing import Any, List
 
+from src.ui.effect_models import PREVIEW_SPECS  # Qt-free; lets us validate display.weather_preview
+
 log = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +28,9 @@ DEFAULTS = {
         "secondary_time_format": "%H:%M",
         "clock_gap": 4,
         "text_outline": 4,
+        "weather_animations": True,
+        "animation_fps": 20,
+        "weather_preview": "",
         "date_format": "%A, %d %B %Y",
     },
     "weather": {
@@ -67,6 +72,7 @@ MINIMUMS = {
     "display.fade_ms": 0,
     "display.clock_gap": 0,
     "display.text_outline": 0,
+    "display.animation_fps": 5,
     "weather.refresh_seconds": 60,
     "transit.refresh_seconds": 10,
     "wallpaper.rotate_seconds": 5,
@@ -131,6 +137,16 @@ class ConfigManager:
                     f"{dotted} must be a number >= {minimum} (got {value!r}); using {default}"
                 )
                 self._set(dotted, default)
+
+        if not isinstance(self.get("display.weather_animations"), bool):
+            self._warnings.append("display.weather_animations must be true or false; using true")
+            self._set("display.weather_animations", True)
+        preview = self.get("display.weather_preview")
+        if preview != "" and preview not in PREVIEW_SPECS:
+            self._warnings.append(
+                f"display.weather_preview {preview!r} is not one of: {', '.join(PREVIEW_SPECS)}; ignoring it"
+            )
+            self._set("display.weather_preview", "")
 
         if not self.get("weather.api_key"):
             self._warnings.append(
