@@ -16,24 +16,6 @@ log = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ICON_DIR = PROJECT_ROOT / "assets" / "icons" / "weather"
 
-ANIMATIONS = {
-    "Clear": "sun",
-    "Clouds": "cloud",
-    "Rain": "rain",
-    "Drizzle": "drizzle",
-    "Thunderstorm": "thunder",
-    "Snow": "snow",
-    "Mist": "mist",
-    "Haze": "mist",
-    "Fog": "mist",
-    "Smoke": "mist",
-    "Dust": "mist",
-    "Sand": "mist",
-    "Ash": "mist",
-    "Squall": "wind",
-    "Tornado": "wind",
-}
-
 
 class WeatherService(PollingService):
     """Emits ``data_fetched({"current": ..., "forecast": ..., "fetched_at": ...})``.
@@ -101,8 +83,3 @@ class WeatherService(PollingService):
         """Path to a bundled icon, or None if the project has no such file."""
         path = ICON_DIR / f"{icon_code}.png"
         return path if path.is_file() else None
-
-    @staticmethod
-    def get_weather_animation(weather_condition: str) -> str:
-        """Animation name for an OpenWeatherMap condition group; "none" if unknown."""
-        return ANIMATIONS.get(weather_condition, "none")
